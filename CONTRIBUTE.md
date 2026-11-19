@@ -5,6 +5,7 @@ README and EXAMPLES are generated with markatzea
 
 ```bash bash
 markatzea README.mz > README.md
+npx markdown-toc -i ./README.md
 ```
 
 ```bash bash > ./EXAMPLES.md

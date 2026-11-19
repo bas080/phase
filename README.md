@@ -2,6 +2,22 @@
 
 A Bash pipeline orchestrator. Write phases as plain Bash functions - `phase` handles sequencing, data flow, retries, and navigation.
 
+<!-- toc -->
+
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Execution model](#execution-model)
+  * [Important considerations](#important-considerations)
+- [Inline commands](#inline-commands)
+- [Navigation](#navigation)
+  * [goto](#goto)
+  * [exit](#exit)
+- [Retries](#retries)
+- [Stdout vs stderr](#stdout-vs-stderr)
+- [License](#license)
+
+<!-- tocstop -->
+
 ## Install
 
 ```bash
@@ -56,6 +72,19 @@ deploying data
 ```
 
 Each phase's **stdout** becomes the next phase's **stdin**. Stderr is passed through directly and never captured.
+
+## Execution model
+
+Unlike a standard Bash script that executes from top to bottom in a single process, `phase` **sources your script multiple times in separate subprocesses**:
+
+1. **Discovery**: Sourced to parse the `phase::pipeline` definition.
+2. **Configuration**: Sourced to query `phase::retries` (if defined).
+3. **Phase Execution**: Sourced in a fresh subprocess for each phase run (and retry attempt), executing only that phase's function or command.
+
+### Important considerations
+
+- **Keep logic inside functions**: Avoid placing executable commands at the top level of the script. Top-level code runs every time the script is sourced by the orchestrator.
+- **State isolation**: Variables or environment changes made inside one phase do not persist into subsequent phases in memory. Pass data downstream using **stdout → stdin** (or write to files).
 
 ## Inline commands
 
