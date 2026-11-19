@@ -1,0 +1,110 @@
+# Phase
+
+A Bash pipeline orchestrator. Write phases as plain Bash functions - `phase` handles sequencing, data flow, retries, and navigation.
+
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bas080/phase/main/phase -o phase
+chmod +x phase
+```
+
+Or clone and use directly:
+
+```bash
+git clone https://github.com/bas080/phase
+cd phase
+./phase example/basic_pipeline.sh
+```
+
+## Quick start
+
+A pipeline is a Bash script with functions and a `phase::pipeline` declaration:
+
+```bash|bash bash
+cat example/basic_pipeline.sh
+```
+
+Run it:
+
+```bash bash
+./phase example/basic_pipeline.sh 2>&1
+```
+
+Each phase's **stdout** becomes the next phase's **stdin**. Stderr is passed through directly and never captured.
+
+## Inline commands
+
+Phases can be shell commands, not just function names. Quote anything with spaces:
+
+```bash|bash bash
+cat example/command_phase.sh
+```
+
+## Navigation
+
+By default a phase advances to the next one on success. Override with:
+
+```bash
+phase::prev          # go back one phase
+phase::goto deploy   # jump to any phase by name
+```
+
+### goto
+
+```bash|bash bash
+cat example/navigation.sh
+```
+
+```bash bash
+./phase example/navigation.sh 2>&1
+```
+
+## Retries
+
+A phase that exits non-zero is retried up to 3 times before the pipeline fails:
+
+```bash|bash bash
+cat example/retry.sh
+```
+
+```bash bash
+./phase example/retry.sh 2>&1; true
+```
+
+The retry count is configurable via:
+
+| Mechanism | Scope | Example |
+|---|---|---|
+| `phase::retries()` | Per-phase, defined in script | `phase::retries() { [[ $1 == flaky ]] && echo 5 || echo 2; }` |
+| `PHASE_RETRY` | All phases | `PHASE_RETRY=5 ./phase pipeline.sh` |
+| hardcoded | Last-resort default | 3 (when nothing else specified) |
+
+`phase::retries` is a Bash function you define in your pipeline script.
+It receives the phase name as `$1` and must print an integer to stdout.
+If the function is absent or returns a non-positive integer, the orchestrator
+falls back to `PHASE_RETRY` (default 3).
+
+```bash|bash bash
+cat example/custom_retries.sh
+```
+
+```bash bash
+./phase example/custom_retries.sh 2>&1; true
+```
+
+## Stdout vs stderr
+
+Only stdout flows through the pipeline. Stderr from any phase is forwarded straight to the terminal:
+
+```bash|bash bash
+cat example/stderr_demo.sh
+```
+
+```bash bash
+./phase example/stderr_demo.sh 2>&1
+```
+
+## License
+
+[GNU Affero General Public License v3.0](./LICENSE)

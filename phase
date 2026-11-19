@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# phase – minimal pipeline orchestrator
+# Usage: phase script.sh
+
+set -uo pipefail
+
+if [[ $# -ne 1 ]]; then
+    printf 'Usage: %s script.sh\n' "$0" >&2
+    exit 2
+fi
+
+SCRIPT_PATH="$1"
+
+log() { printf '%s\n' "$*" >&2; }
+
+# ---------------------------------------------------------------------------
+# Parse phase::pipeline by sourcing the script in a subshell with the helper
+# overridden to print each phase name on its own line. The subshell () keeps
+# user-defined functions from leaking into this process.
+# ---------------------------------------------------------------------------
+parse_phases() (
+    phase::prev()     { :; }
+    phase::goto()     { :; }
+    phase::retries()  { :; }
+    phase::pipeline() { printf '%s\n' "$@"; }
+    # shellcheck disable=SC1090
+    source "$SCRIPT_PATH"
+)
+
+# Resolve retry counts for all phases in one subshell (script sourced once).
+# Priority: PHASE_RETRY env var > phase::retries "$phase" > hardcoded 3.
+# A non-positive-integer result uses the default.
+# ---------------------------------------------------------------------------
+resolve_retries() (
+    phase::prev()     { :; }
+    phase::goto()     { :; }
+    phase::pipeline() { :; }
+    # shellcheck disable=SC1090
+    source "$SCRIPT_PATH"
+    for phase in "$@"; do
+        # Priority: PHASE_RETRY > phase::retries > 3
+        if [[ -n "${PHASE_RETRY:-}" ]]; then
+            printf '%s\n' "$PHASE_RETRY"
+        elif declare -f phase::retries > /dev/null 2>&1; then
+            result=$(phase::retries "$phase")
+            if [[ $result =~ ^[1-9][0-9]*$ ]]; then
+                printf '%s\n' "$result"
+            else
+                printf '%s\n' "${PHASE_RETRY:-3}"
+            fi
+        else
+            printf '%s\n' "${PHASE_RETRY:-3}"
+        fi
+    done
+)
+
+mapfile -t PHASES < <(parse_phases)
+
+if [[ ${#PHASES[@]} -eq 0 ]]; then
+    printf 'Error: no phase::pipeline found in %s\n' "$SCRIPT_PATH" >&2
+    exit 1
+fi
+
+log "Phases: ${PHASES[*]}"
+
+# Resolve retry counts for all phases at once.
+mapfile -t RETRY_COUNTS < <(resolve_retries "${PHASES[@]}")
+
+# ---------------------------------------------------------------------------
+# Temp files: data channel between phases + FD3 control-event channel.
+# ---------------------------------------------------------------------------
+tmp_in=$(mktemp)
+tmp_out=$(mktemp)
+event_file=$(mktemp)
+trap 'rm -f "$tmp_in" "$tmp_out" "$event_file"' EXIT
+
+# Capture initial stdin (empty when running from a terminal)
+[[ -t 0 ]] || cat > "$tmp_in"
+
+# ---------------------------------------------------------------------------
+# Main loop: run each phase in an isolated bash process.
+# ---------------------------------------------------------------------------
+i=0
+while [[ $i -lt ${#PHASES[@]} ]]; do
+    phase_name="${PHASES[$i]}"
+    max_retries="${RETRY_COUNTS[$i]}"
+
+    log "Running phase $phase_name (retries: $max_retries)"
+
+    attempt=1
+    while [[ $attempt -le $max_retries ]]; do
+        : > "$tmp_out"
+        : > "$event_file"
+
+        # Each phase runs in its own bash subprocess for full isolation.
+        # Positional params: $1 = script path, $2 = phase name / command.
+        # FD3 carries control events (next/prev/goto) back to the orchestrator.
+        bash -c '
+            phase::prev()     { printf "phase::prev\n"         >&3; }
+            phase::goto()     { printf "phase::goto %s\n" "$1" >&3; }
+            phase::pipeline() { :; }
+            # shellcheck disable=SC1090
+            source "$1"
+            eval "$2"
+            phase_status=$?
+            printf "phase::returned\n" >&3
+            exit "$phase_status"
+        ' -- "$SCRIPT_PATH" "$phase_name" \
+            < "$tmp_in" > "$tmp_out" 3>"$event_file"
+        exit_code=$?
+        nav=$(cat "$event_file")
+
+        # An explicit `exit` inside the phase function terminates this
+        # subprocess, so the phase::returned marker never gets printed.
+        # Treat that as a pipeline abort (same behavior as phase::abort).
+        if [[ $nav != *"phase::returned"* ]]; then
+            cp "$tmp_out" "$tmp_in"
+            log "Phase $phase_name aborted pipeline (exit)"
+            cat "$tmp_in"
+            exit 0
+        fi
+
+        log "Phase $phase_name exit=$exit_code"
+
+        if [[ $exit_code -ne 0 ]]; then
+            if [[ $attempt -lt $max_retries ]]; then
+                log "Phase $phase_name retry $((attempt + 1))/$max_retries"
+                cp "$tmp_out" "$tmp_in"
+                attempt=$((attempt + 1))
+                continue
+            fi
+            log "Phase $phase_name failed after $max_retries attempts"
+            exit 1
+        fi
+
+        log "Phase $phase_name succeeded"
+        cp "$tmp_out" "$tmp_in"
+
+        # Read and act on any navigation events from FD3
+        nav=$(cat "$event_file")
+        if [[ $nav == *"phase::goto"* ]]; then
+            target=$(awk '/phase::goto/ { print $2; exit }' <<< "$nav")
+            target_idx=-1
+            for j in "${!PHASES[@]}"; do
+                if [[ "${PHASES[$j]}" == "$target" ]]; then
+                    target_idx=$j
+                    break
+                fi
+            done
+            if [[ $target_idx -lt 0 ]]; then
+                log "Unknown GOTO target: $target"
+                exit 1
+            fi
+            i=$target_idx
+        elif [[ $nav == *"phase::prev"* ]]; then
+            [[ $i -gt 0 ]] && i=$((i - 1))
+        else
+            i=$((i + 1))
+        fi
+        break
+    done
+done
+
+# Emit the final phase's stdout
+cat "$tmp_in"
