@@ -112,12 +112,12 @@ while [[ $i -lt ${#PHASES[@]} ]]; do
 
         # An explicit `exit` inside the phase function terminates this
         # subprocess, so the phase::returned marker never gets printed.
-        # Treat that as a pipeline abort (same behavior as phase::abort).
+        # Treat that as stopping the pipeline cleanly.
         if [[ $nav != *"phase::returned"* ]]; then
             cp "$tmp_out" "$tmp_in"
             log "Phase $phase_name aborted pipeline (exit)"
             cat "$tmp_in"
-            exit 0
+            exit "$exit_code"
         fi
 
         log "Phase $phase_name exit=$exit_code"
@@ -130,7 +130,7 @@ while [[ $i -lt ${#PHASES[@]} ]]; do
                 continue
             fi
             log "Phase $phase_name failed after $max_retries attempts"
-            exit 1
+            exit "$exit_code"
         fi
 
         log "Phase $phase_name succeeded"

@@ -20,6 +20,7 @@ for script in ./example/*; do
 
   echo '```'
   ./phase "$script" 2>&1
+  echo "exit code: $?"
   echo '```'
 done
 

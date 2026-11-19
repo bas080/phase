@@ -16,6 +16,7 @@ Phase step1 succeeded
 Running phase step2 (retries: 3)
 Phase step2 aborted pipeline (exit)
 step2 output
+exit code: 0
 ```
 ## ./example/basic_pipeline.sh
 
@@ -42,6 +43,7 @@ Running phase deploy (retries: 3)
 Phase deploy exit=0
 Phase deploy succeeded
 deploying data
+exit code: 0
 ```
 ## ./example/command_phase.sh
 
@@ -63,6 +65,7 @@ Running phase transform (retries: 3)
 Phase transform exit=0
 Phase transform succeeded
 Transforming...
+exit code: 0
 ```
 ## ./example/custom_retries.sh
 
@@ -96,6 +99,7 @@ Phase flaky exit=1
 Phase flaky retry 5/5
 Phase flaky exit=1
 Phase flaky failed after 5 attempts
+exit code: 1
 ```
 ## ./example/exit_abort.sh
 
@@ -119,6 +123,7 @@ Phases: abort_phase step2
 Running phase abort_phase (retries: 3)
 Phase abort_phase aborted pipeline (exit)
 aborting
+exit code: 0
 ```
 ## ./example/navigation.sh
 
@@ -138,6 +143,7 @@ Running phase step3 (retries: 3)
 Phase step3 exit=0
 Phase step3 succeeded
 step3 final output
+exit code: 0
 ```
 ## ./example/retry.sh
 
@@ -163,6 +169,7 @@ Phase flaky exit=1
 Phase flaky retry 3/3
 Phase flaky exit=1
 Phase flaky failed after 3 attempts
+exit code: 1
 ```
 ## ./example/return_fail.sh
 
@@ -187,6 +194,7 @@ Phase flaky_return exit=1
 Phase flaky_return retry 3/3
 Phase flaky_return exit=1
 Phase flaky_return failed after 3 attempts
+exit code: 1
 ```
 ## ./example/stderr_demo.sh
 
@@ -224,4 +232,5 @@ Phase forwarder succeeded
 forwarder got stdin:
   > emitter-stdout
 forwarder-done
+exit code: 0
 ```

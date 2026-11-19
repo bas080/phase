@@ -48,6 +48,7 @@ By default a phase advances to the next one on success. Override with:
 ```bash
 phase::prev          # go back one phase
 phase::goto deploy   # jump to any phase by name
+exit                 # stop the pipeline cleanly
 ```
 
 ### goto
@@ -60,9 +61,21 @@ cat example/navigation.sh
 ./phase example/navigation.sh 2>&1
 ```
 
+### exit
+
+Calling `exit [status]` stops the pipeline immediately without executing subsequent phases. The current phase's stdout is emitted and `phase` exits with the same status code:
+
+```bash|bash bash
+cat example/abort.sh
+```
+
+```bash bash
+./phase example/abort.sh 2>&1
+```
+
 ## Retries
 
-A phase that exits non-zero is retried up to 3 times before the pipeline fails:
+A phase that returns non-zero is retried up to 3 times before the pipeline fails:
 
 ```bash|bash bash
 cat example/retry.sh

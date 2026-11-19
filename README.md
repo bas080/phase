@@ -12,7 +12,7 @@ chmod +x phase
 Or clone and use directly:
 
 ```bash
-git clone https://github.com/YOUR_USER/phase
+git clone https://github.com/bas080/phase
 cd phase
 ./phase example/basic_pipeline.sh
 ```
@@ -78,6 +78,7 @@ By default a phase advances to the next one on success. Override with:
 ```bash
 phase::prev          # go back one phase
 phase::goto deploy   # jump to any phase by name
+exit                 # stop the pipeline cleanly
 ```
 
 ### goto
@@ -107,9 +108,37 @@ Phase step3 succeeded
 step3 final output
 ```
 
+### exit
+
+Calling `exit [status]` stops the pipeline immediately without executing subsequent phases. The current phase's stdout is emitted and `phase` exits with the same status code:
+
+```bash
+cat example/abort.sh
+```
+```bash
+#!/bin/bash
+function step1 { echo "step1 output"; }
+function step2 { echo "step2 output"; exit 0; }
+function step3 { echo "step3 should not run"; }
+phase::pipeline step1 step2 step3
+```
+
+```bash
+./phase example/abort.sh 2>&1
+```
+```
+Phases: step1 step2 step3
+Running phase step1 (retries: 3)
+Phase step1 exit=0
+Phase step1 succeeded
+Running phase step2 (retries: 3)
+Phase step2 aborted pipeline (exit)
+step2 output
+```
+
 ## Retries
 
-A phase that exits non-zero is retried up to 3 times before the pipeline fails:
+A phase that returns non-zero is retried up to 3 times before the pipeline fails:
 
 ```bash
 cat example/retry.sh
