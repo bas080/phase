@@ -1,4 +1,4 @@
-# Phase
+# 🚦Phase
 
 A Bash pipeline orchestrator. Write phases as plain Bash functions - `phase` handles sequencing, data flow, retries, and navigation.
 
